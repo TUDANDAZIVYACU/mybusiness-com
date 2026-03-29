@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Businessbi {
+  id             String        @id @default(uuid())
+  name         String
+  email        String        @unique
+
+  categories   Category[]
+  products     Product[]
+  transactions Transaction[]
+}
+
+model Category {
+  id             String        @id @default(uuid())
+  name         String
+  
+  businessbiId String
+  businessbi     Businessbi @relation(fields: [businessbiId], references: [id])
+
+  products     Product[]
+}
+
+model Product {
+   id             String        @id @default(uuid())
+  name         String
+  price        Float
+  quantity     Int      @default(0)
+  unit         String
+  imageUrl     String?
+
+  categoryId   String
+  businessbiId String
+
+  category     Category   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  businessbi    Businessbi @relation(fields: [businessbiId], references: [id])
+
+  transactions Transaction[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Transaction {
+  id             String        @id @default(uuid())
+  type         String
+  quantity     Int
+
+  productId    String
+  businessbiId String
+
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  businessbi     Businessbi @relation(fields: [businessbiId], references: [id])
+
+  createdAt    DateTime @default(now())
+}
+
