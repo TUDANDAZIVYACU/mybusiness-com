@@ -1,7 +1,12 @@
 import { existsSync } from "fs";
 import { mkdir, writeFile, unlink } from "fs/promises";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from 'next/server'
+
+export async function GET(req: NextRequest) {
+  return NextResponse.json({ ok: true })
+};
+
 import { join } from "path";
 
 export async function POST(request: NextRequest) {
