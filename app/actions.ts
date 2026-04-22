@@ -1,6 +1,6 @@
 "use server"
 
-import prisma from "@/lib/prisma"
+import { prisma } from "@/lib/prisma"
 import { FormDataType, OrderItem, Product, ProductOverviewStats, StockSummary, Transaction } from "@/type"
 import { Category } from "@prisma/client"
 
