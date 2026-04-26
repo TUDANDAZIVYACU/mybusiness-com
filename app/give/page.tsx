@@ -4,7 +4,6 @@ import { useUser } from '@clerk/nextjs'
 import React, { useEffect, useState } from 'react'
 import { deductStockWithTransaction, readProducts } from '../actions'
 import Wrapper from '../components/Wrapper'
-import { text } from 'stream/consumers'
 import ProductComponent from '../components/ProductComponent'
 import EmptyState from '../components/EmptyState'
 import ProductImage from '../components/ProductImage'
@@ -13,6 +12,7 @@ import { toast } from 'react-toastify'
 
 const page = () => {
 
+   
     const { user } = useUser()
     const email = user?.primaryEmailAddress?.emailAddress as string
     const [products, setProducts] = useState<Product[]>([])
@@ -30,14 +30,17 @@ const page = () => {
                 }
             }
         } catch (error) {
+            console.log("USER:", user)
+            console.log("EMAIL:", email)
             console.error(error)
         }
     }
 
-    useEffect(() => {
-        if (email)
-            fetchProducts()
-    }, [email])
+   useEffect(() => {
+                if (!user) return
+                   if (!user.primaryEmailAddress?.emailAddress) return
+                      fetchProducts()
+                   }, [user])
 
     const filteredAvailableProducts = products
         .filter((product) =>
@@ -102,23 +105,30 @@ const page = () => {
 
 
     const handleSubmit = async () => {
-        try {
-            if (order.length == 0) {
-                toast.error("Veuillez ajouter des produits à la commande.")
-                return
-            }
-            const response = await deductStockWithTransaction(order, email)
+    try {
+        if (!email) {
+            toast.error("Utilisateur non connecté")
+            return
+        }
 
-            if (response?.success) {
-                toast.success("Vente confirmée avec succès !")
-                setOrder([])
-                setSelectedProductIds([])
-                fetchProducts();
-            } else {
-                toast.error(`${response?.message}`)
-            }
+        if (order.length == 0) {
+            toast.error("Veuillez ajouter des produits à la commande.")
+            return
+        }
+
+        const response = await deductStockWithTransaction(order, email)
+
+        if (response?.success) {
+            toast.success("Vente confirmée avec succès !")
+            setOrder([])
+            setSelectedProductIds([])
+            fetchProducts();
+         } else {
+            toast.error(`${response?.message}`)
+         }
         } catch (error) {
-            console.error(error)
+        console.error(error)
+        toast.error("Erreur lors de la transaction")
         }
     }
 
@@ -182,23 +192,36 @@ const page = () => {
                                                 {item.name}
                                             </td>
                                             <td>
-                                                <input
-                                                    type="number"
-                                                    value={item.quantity}
-                                                    min="1"
-                                                    max={item.availableQuantity}
-                                                    className='input input-bordered w-20'
-                                                    onChange={(e) => handleQuantityChange(item.productId, Number(e.target.value))}
-                                                />
+                                                
+                                                <input 
+                                                
+                                                     type="number"
+                                                     value={item.quantity}
+                                                     min="1"
+                                                     max={item.availableQuantity}
+                                                     className='input input-bordered w-20'
+                                                     onChange={(e) => {
+                                                                   const value = Number(e.target.value)
+
+                                                                        if (isNaN(value)) return
+
+                                                                          if (value >= 1 && value <= item.availableQuantity) {
+                                                                              handleQuantityChange(item.productId, value)
+                                                                             }
+                                                                      }
+                                                                }
+/>
                                             </td>
+
                                             <td className='capitalize'>
                                                 {item.unit}
                                             </td>
                                             <td>
-                                                <button
-                                                    className='btn btn-sm btn-error'
-                                                    onClick={() => handleRemoveFromCart(item.productId)}
-                                                >
+                                               <button
+                                                      aria-label="Supprimer"
+                                                             className='btn btn-sm btn-error'
+                                                            onClick={() => handleRemoveFromCart(item.productId)}
+>
                                                     <Trash className='w-4 h-4' />
                                                 </button>
                                             </td>

@@ -1,6 +1,6 @@
 "use server"
 
-import { prisma } from "@/lib/prisma"
+import { prisma }  from "@/lib/prisma"
 import { FormDataType, OrderItem, Product, ProductOverviewStats, StockSummary, Transaction } from "@/type"
 import { Category } from "@prisma/client"
 
@@ -219,15 +219,16 @@ export async function deleteProduct(id: string, email: string) {
     }
 }
 
-export async function readProducts(email: string): Promise<Product[] | undefined> {
+export async function readProducts(email: string): Promise<Product[]> {
     try {
         if (!email) {
-            throw new Error("l'email est requis .")
+            throw new Error("Email requis")
         }
 
         const businessbi = await getBusinessbi(email)
+
         if (!businessbi) {
-            throw new Error("Aucun Business trouvé avec cet email.");
+            return []
         }
 
         const products = await prisma.product.findMany({
@@ -235,7 +236,15 @@ export async function readProducts(email: string): Promise<Product[] | undefined
                 businessbiId: businessbi.id
             },
             include: {
-                category: true
+                category: {
+                    select: {
+                        name: true
+                    }
+                }
+            },
+            take: 50, // 🔥 IMPORTANT PERFORMANCE
+            orderBy: {
+                createdAt: "desc"
             }
         })
 
@@ -245,7 +254,8 @@ export async function readProducts(email: string): Promise<Product[] | undefined
         }))
 
     } catch (error) {
-        console.error(error)
+        console.error("readProducts error:", error)
+        return [] // 🔥 IMPORTANT (ne jamais retourner undefined)
     }
 }
 
@@ -328,61 +338,68 @@ export async function deductStockWithTransaction(orderItems: OrderItem[], email:
     try {
 
         if (!email) {
-            throw new Error("l'email est requis .")
+            return { success: false, message: "Email requis" }
         }
 
         const businessbi = await getBusinessbi(email)
+
         if (!businessbi) {
-            throw new Error("Aucun Business trouvé avec cet email.");
+            return { success: false, message: "Business introuvable" }
         }
 
+        // 1. Vérification stock AVANT transaction
         for (const item of orderItems) {
             const product = await prisma.product.findUnique({
                 where: { id: item.productId }
             })
 
             if (!product) {
-                throw new Error(`Produit avec l'ID ${item.productId} introuvable.`)
+                return { success: false, message: "Produit introuvable" }
             }
 
             if (item.quantity <= 0) {
-                throw new Error(`La quantité demandée pour "${product.name}" doit être supérieure à zéro.`)
+                return { success: false, message: "Quantité invalide" }
             }
 
             if (product.quantity < item.quantity) {
-                throw new Error(`Le produit "${product.name}" n'a pas assez de stock. Demandé: ${item.quantity}, Disponible: ${product.quantity} / ${product.unit}.`)
+                return {
+                    success: false,
+                    message: `Stock insuffisant pour ${product.name}`
+                }
             }
         }
 
-        await prisma.$transaction(async (tx) => {
-            for (const item of orderItems) {
-                await tx.product.update({
-                    where: {
-                        id: item.productId,
-                        businessbiId: businessbi.id
-                    },
+        // 2. TRANSACTION SAFE (VERSION SIMPLE)
+        await prisma.$transaction(
+            orderItems.map((item) =>
+                prisma.product.update({
+                    where: { id: item.productId },
                     data: {
                         quantity: {
-                            decrement: item.quantity,
+                            decrement: item.quantity
                         }
                     }
-                });
-                await tx.transaction.create({
-                    data: {
-                        type: "OUT",
-                        quantity: item.quantity,
-                        productId: item.productId,
-                        businessbiId: businessbi.id
-                    }
                 })
-            }
+            )
+        )
 
+        await prisma.transaction.createMany({
+            data: orderItems.map((item) => ({
+                type: "OUT",
+                quantity: item.quantity,
+                productId: item.productId,
+                businessbiId: businessbi.id
+            }))
         })
 
         return { success: true }
-    } catch (error) {
-        console.error(error)
-        return { success: false, message: error }
+
+    } catch (error: any) {
+        console.error("ERROR GIVE:", error)
+        return {
+            success: false,
+            message: error.message || "Erreur serveur"
+        }
     }
 }
 
